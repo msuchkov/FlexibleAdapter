@@ -23,7 +23,17 @@ dependencies {
 	compile supportDependencies.recyclerview
 	compile supportDependencies.design
 }
+task deleteJar(type: Delete){
+	delete 'libs/customFlexibleAdapter.jar'
+}
 
+task createJar(type: Copy){
+	from('build/intermediates/bundles/release/')
+	into('libs/')
+	include('classes.jar')
+	rename('classes.jar','customFlexibleAdapter.jar')
+}
+createJar.dependsOn(deleteJar, build)
 //apply from: '../maven-install.gradle'
 //apply from: '../maven-publish.gradle'
 //apply from: '../jfrog-bintray-publish.gradle'

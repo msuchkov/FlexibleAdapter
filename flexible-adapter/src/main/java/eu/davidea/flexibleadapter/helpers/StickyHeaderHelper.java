@@ -47,13 +47,15 @@ public class StickyHeaderHelper extends OnScrollListener {
 	private ViewGroup mStickyHolderLayout;
 	private FlexibleViewHolder mStickyHeaderViewHolder;
 	private OnStickyHeaderChangeListener mStickyHeaderChangeListener;
+	private boolean mIsReverse;
 	private int mHeaderPosition = RecyclerView.NO_POSITION;
 
 
 	public StickyHeaderHelper(FlexibleAdapter adapter,
-							  OnStickyHeaderChangeListener stickyHeaderChangeListener) {
+							  OnStickyHeaderChangeListener stickyHeaderChangeListener, boolean isReverse) {
 		mAdapter = adapter;
 		mStickyHeaderChangeListener = stickyHeaderChangeListener;
+		mIsReverse = isReverse;
 	}
 
 	@Override
@@ -155,7 +157,7 @@ public class StickyHeaderHelper extends OnScrollListener {
 		// Check if there is a new header to be sticky
 		if (mHeaderPosition != headerPosition) {
 			mHeaderPosition = headerPosition;
-			FlexibleViewHolder holder = getHeaderViewHolder(headerPosition);
+			FlexibleViewHolder holder = mAdapter.getHeaderViewHolder(headerPosition);
 			if (FlexibleAdapter.DEBUG)
 				Log.d(TAG, "swapHeader newHeaderPosition=" + mHeaderPosition);
 			swapHeader(holder);
@@ -266,7 +268,13 @@ public class StickyHeaderHelper extends OnScrollListener {
 			if (mRecyclerView.getLayoutManager() instanceof StaggeredGridLayoutManager) {
 				adapterPosHere = ((StaggeredGridLayoutManager) mRecyclerView.getLayoutManager()).findFirstVisibleItemPositions(null)[0];
 			} else {
-				adapterPosHere = ((LinearLayoutManager) mRecyclerView.getLayoutManager()).findFirstVisibleItemPosition();
+
+				if(mIsReverse){
+					adapterPosHere = ((LinearLayoutManager) mRecyclerView.getLayoutManager()).findLastVisibleItemPosition();
+				}else {
+					adapterPosHere = ((LinearLayoutManager) mRecyclerView.getLayoutManager()).findFirstVisibleItemPosition();
+
+				}
 			}
 			if (adapterPosHere == 0 && !hasStickyHeaderTranslated(0)) {
 				return RecyclerView.NO_POSITION;
@@ -278,51 +286,6 @@ public class StickyHeaderHelper extends OnScrollListener {
 			return RecyclerView.NO_POSITION;
 		}
 		return mAdapter.getGlobalPositionOf(header);
-	}
-
-	/**
-	 * Gets the header view for the associated header position. If it doesn't exist yet, it will
-	 * be created, measured, and laid out.
-	 *
-	 * @param position the adapter position to get the header view
-	 * @return ViewHolder of type FlexibleViewHolder of the associated header position
-	 */
-	@SuppressWarnings("unchecked")
-	private FlexibleViewHolder getHeaderViewHolder(int position) {
-		//Find existing ViewHolder
-		FlexibleViewHolder holder = (FlexibleViewHolder) mRecyclerView.findViewHolderForAdapterPosition(position);
-		if (holder == null) {
-			//Create and binds a new ViewHolder
-			holder = (FlexibleViewHolder) mAdapter.createViewHolder(mRecyclerView, mAdapter.getItemViewType(position));
-			mAdapter.bindViewHolder(holder, position);
-
-			//Restore the Adapter position
-			holder.setBackupPosition(position);
-
-			//Calculate width and height
-			int widthSpec;
-			int heightSpec;
-			if (Utils.getOrientation(mRecyclerView.getLayoutManager()) == OrientationHelper.VERTICAL) {
-				widthSpec = View.MeasureSpec.makeMeasureSpec(mRecyclerView.getWidth(), View.MeasureSpec.EXACTLY);
-				heightSpec = View.MeasureSpec.makeMeasureSpec(mRecyclerView.getHeight(), View.MeasureSpec.UNSPECIFIED);
-			} else {
-				widthSpec = View.MeasureSpec.makeMeasureSpec(mRecyclerView.getWidth(), View.MeasureSpec.UNSPECIFIED);
-				heightSpec = View.MeasureSpec.makeMeasureSpec(mRecyclerView.getHeight(), View.MeasureSpec.EXACTLY);
-			}
-
-			//Measure and Layout the stickyView
-			final View headerView = holder.getContentView();
-			int childWidth = ViewGroup.getChildMeasureSpec(widthSpec,
-					mRecyclerView.getPaddingLeft() + mRecyclerView.getPaddingRight(),
-					headerView.getLayoutParams().width);
-			int childHeight = ViewGroup.getChildMeasureSpec(heightSpec,
-					mRecyclerView.getPaddingTop() + mRecyclerView.getPaddingBottom(),
-					headerView.getLayoutParams().height);
-
-			headerView.measure(childWidth, childHeight);
-			headerView.layout(0, 0, headerView.getMeasuredWidth(), headerView.getMeasuredHeight());
-		}
-		return holder;
 	}
 
 }

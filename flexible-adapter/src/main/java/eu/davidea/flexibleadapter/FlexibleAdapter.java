@@ -26,6 +26,7 @@ import android.support.annotation.IntRange;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.view.ViewCompat;
+import android.support.v7.widget.OrientationHelper;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.helper.ItemTouchHelper;
 import android.util.Log;
@@ -668,16 +669,6 @@ public class FlexibleAdapter<T extends IFlexible>
 	/*--------------------------*/
 
 	/**
-	 * @return true if orphan headers will be removed when unlinked, false if are kept unlinked
-	 * @see #setRemoveOrphanHeaders(boolean)
-	 * @since 5.0.0-b6
-	 */
-	//TODO: deprecation?
-	public boolean isRemoveOrphanHeaders() {
-		return removeOrphanHeaders;
-	}
-
-	/**
 	 * Sets if the orphan headers will be deleted as well during the removal process.
 	 * <p>Default value is {@code false}.</p>
 	 *
@@ -718,41 +709,6 @@ public class FlexibleAdapter<T extends IFlexible>
 	@NonNull
 	public List<IHeader> getOrphanHeaders() {
 		return mOrphanHeaders;
-	}
-
-	/**
-	 * Adds or overwrites the header for the passed Sectionable item.
-	 * <p>The header will be automatically displayed if all headers are currently shown and the
-	 * header is currently hidden, otherwise it will be kept hidden.</p>
-	 *
-	 * @param item   the item that holds the header
-	 * @param header the header item
-	 * @return this Adapter, so the call can be chained
-	 * @since 5.0.0-b6
-	 */
-	//TODO: deprecation?
-	public FlexibleAdapter linkHeaderTo(@NonNull T item, @NonNull IHeader header) {
-		linkHeaderTo(item, header, Payload.LINK);
-		if (header.isHidden() && headersShown) {
-			showHeaderOf(getGlobalPositionOf(item), item, false);
-		}
-		return this;
-	}
-
-	/**
-	 * Hides and completely removes the header from the Adapter and from the item that holds it.
-	 * <p>No undo is possible.</p>
-	 *
-	 * @param item the item that holds the header
-	 * @since 5.0.0-b6
-	 */
-	//TODO: deprecation?
-	public IHeader unlinkHeaderFrom(@NonNull T item) {
-		IHeader header = unlinkHeaderFrom(item, Payload.UNLINK);
-		if (header != null && !header.isHidden()) {
-			hideHeaderOf(item);
-		}
-		return header;
 	}
 
 	/**
@@ -829,7 +785,14 @@ public class FlexibleAdapter<T extends IFlexible>
 	public IHeader getSectionHeader(@IntRange(from = 0) int position) {
 		//Headers are not visible nor sticky
 		if (!headersShown) return null;
+//		((LinearLayoutManager)mRecyclerView.getLayoutManager());
 		//When headers are visible and sticky, get the previous header
+		if(mIsReversed){
+			for (int i = position; i < mItems.size(); i++) {
+				T item = getItem(i);
+				if (isHeader(item)) return (IHeader) item;
+			}
+		}
 		for (int i = position; i >= 0; i--) {
 			T item = getItem(i);
 			if (isHeader(item)) return (IHeader) item;
@@ -837,36 +800,7 @@ public class FlexibleAdapter<T extends IFlexible>
 		return null;
 	}
 
-	/**
-	 * Retrieves the index of the specified header/section item.
-	 * <p>Counts the headers until this one.</p>
-	 *
-	 * @param header the header/section item
-	 * @return the index of the specified header/section
-	 * @since 5.0.0-b6
-	 */
-	//TODO: deprecation?
-	public int getSectionIndex(@NonNull IHeader header) {
-		int position = getGlobalPositionOf(header);
-		return getSectionIndex(position);
-	}
 
-	/**
-	 * Retrieves the header/section index of any specified position.
-	 * <p>Counts the headers until this one.</p>
-	 *
-	 * @param position any item position
-	 * @return the index of the specified item position
-	 * @since 5.0.0-b6
-	 */
-	//TODO: deprecation?
-	public int getSectionIndex(@IntRange(from = 0) int position) {
-		int sectionIndex = 0;
-		for (int i = 0; i <= position; i++) {
-			if (isHeader(getItem(i))) sectionIndex++;
-		}
-		return sectionIndex;
-	}
 
 	/**
 	 * Provides all the items that belongs to the section represented by the specified header.
@@ -885,24 +819,6 @@ public class FlexibleAdapter<T extends IFlexible>
 			item = getItem(++startPosition);
 		}
 		return sectionItems;
-	}
-
-	/**
-	 * Provides all the item positions that belongs to the section represented by the specified header.
-	 *
-	 * @param header the header that represents the section
-	 * @return NonNull list of all item positions in the specified section.
-	 * @since 5.0.0-b8
-	 */
-	@NonNull
-	public List<Integer> getSectionItemPositions(@NonNull IHeader header) {
-		List<Integer> sectionItemPositions = new ArrayList<>();
-		int startPosition = getGlobalPositionOf(header);
-		T item = getItem(++startPosition);
-		while (hasSameHeader(item, header)) {
-			sectionItemPositions.add(++startPosition);
-		}
-		return sectionItemPositions;
 	}
 
 	/**
@@ -958,7 +874,7 @@ public class FlexibleAdapter<T extends IFlexible>
 				if (sticky) {
 					headersSticky = true;
 					if (mStickyHeaderHelper == null)
-						mStickyHeaderHelper = new StickyHeaderHelper(FlexibleAdapter.this, mStickyHeaderChangeListener);
+						mStickyHeaderHelper = new StickyHeaderHelper(FlexibleAdapter.this, mStickyHeaderChangeListener,mIsReversed);
 					if (!mStickyHeaderHelper.isAttachedToRecyclerView())
 						mStickyHeaderHelper.attachToRecyclerView(mRecyclerView);
 					if (DEBUG) Log.i(TAG, "Sticky headers enabled");
@@ -1064,22 +980,44 @@ public class FlexibleAdapter<T extends IFlexible>
 			});
 		}
 	}
-
-	/**
-	 * @param init true to skip the call to notifyItemInserted, false otherwise
-	 */
 	private void showAllHeadersWithReset(boolean init) {
 		multiRange = true;
-		int position = 0;
-		resetHiddenStatus();//Necessary after the filter and the update
-		while (position < mItems.size()) {
-			if (showHeaderOf(position, mItems.get(position), init))
-				position++;//It's the same element, skip it
-			position++;
+		if(mIsReversed){
+			int position = mItems.size()-1;
+			resetHiddenStatus();//Necessary after the filter and the update
+			while (position >= 0) {
+				showHeaderOf(position, mItems.get(position), init);
+				position--;
+			}
+		}else {
+
+			int position = 0;
+			resetHiddenStatus();//Necessary after the filter and the update
+			while (position < mItems.size()) {
+				if (showHeaderOf(position, mItems.get(position), init))
+					position++;//It's the same element, skip it
+				position++;
+			}
 		}
 		headersShown = true;
 		multiRange = false;
 	}
+//
+//	/**
+//	 * @param init true to skip the call to notifyItemInserted, false otherwise
+//	 */
+//	private void showAllHeadersWithReset(boolean init) {
+//		multiRange = true;
+//		int position = mItems.size()-1;
+//		resetHiddenStatus();//Necessary after the filter and the update
+//		while (position >= 0) {
+//			if (showHeaderOf(position, mItems.get(position), init))
+//				position--;//It's the same element, skip it
+//			position--;
+//		}
+//		headersShown = true;
+//		multiRange = false;
+//	}
 
 	/**
 	 * Internal method to show/add a header in the internal list.
@@ -1098,14 +1036,25 @@ public class FlexibleAdapter<T extends IFlexible>
 			if (DEBUG) Log.v(TAG, "Showing header at position " + position + " header=" + header);
 			header.setHidden(false);
 			if (init) {//Skip notifyItemInserted!
-				if (position < mItems.size()) {
-					mItems.add(position, (T) header);
-				} else {
-					mItems.add((T) header);
+				if(mIsReversed) {
+				++position;
 				}
-				return true;
+//					if (position < mItems.size()) {
+//						mItems.add(position +1, (T) header);
+//					} else {
+//						mItems.add((T) header);
+//					}
+//					return true;
+//				}else {
+					if (position < mItems.size()) {
+						mItems.add(position, (T) header);
+					} else {
+						mItems.add((T) header);
+					}
+					return true;
+//				}
 			} else {
-				return addItem(position, (T) header);
+				return addItem(mIsReversed ? position + 1 :position , (T) header);
 			}
 		}
 		return false;
@@ -2416,12 +2365,17 @@ public class FlexibleAdapter<T extends IFlexible>
 								@IntRange(from = 0) int index) {
 		if (DEBUG) Log.d(TAG, "addItemToSection relativePosition=" + index);
 		int headerPosition = getGlobalPositionOf(header);
+		headerPosition = mIsReversed && headerPosition < 0 ? getItemCount(): headerPosition;
 		if (index >= 0) {
 			item.setHeader(header);
 			if (headerPosition >= 0 && isExpandable((T) header))
 				addSubItem(headerPosition, index, (T) item, false, Payload.SUB_ITEM);
 			else
+			if(mIsReversed){
+				addItem(headerPosition - index, (T) item);
+			}else {
 				addItem(headerPosition + 1 + index, (T) item);
+			}
 		}
 		//return the position
 		return getGlobalPositionOf(item);
@@ -4040,6 +3994,52 @@ public class FlexibleAdapter<T extends IFlexible>
 			this.mSearchText = savedInstanceState.getString(EXTRA_SEARCH);
 		}
 	}
+
+	/**
+	 * Gets the header view for the associated header position. If it doesn't exist yet, it will
+	 * be created, measured, and laid out.
+	 *
+	 * @param position the adapter position to get the header view
+	 * @return ViewHolder of type FlexibleViewHolder of the associated header position
+	 */
+	@SuppressWarnings("unchecked")
+	public FlexibleViewHolder getHeaderViewHolder(int position) {
+		//Find existing ViewHolder
+		FlexibleViewHolder holder = (FlexibleViewHolder) mRecyclerView.findViewHolderForAdapterPosition(position);
+		if (holder == null) {
+			//Create and binds a new ViewHolder
+			holder = (FlexibleViewHolder) createViewHolder(mRecyclerView, getItemViewType(position));
+			bindViewHolder(holder, position);
+
+			//Restore the Adapter position
+			holder.setBackupPosition(position);
+
+			//Calculate width and height
+			int widthSpec;
+			int heightSpec;
+			if (Utils.getOrientation(mRecyclerView.getLayoutManager()) == OrientationHelper.VERTICAL) {
+				widthSpec = View.MeasureSpec.makeMeasureSpec(mRecyclerView.getWidth(), View.MeasureSpec.EXACTLY);
+				heightSpec = View.MeasureSpec.makeMeasureSpec(mRecyclerView.getHeight(), View.MeasureSpec.UNSPECIFIED);
+			} else {
+				widthSpec = View.MeasureSpec.makeMeasureSpec(mRecyclerView.getWidth(), View.MeasureSpec.UNSPECIFIED);
+				heightSpec = View.MeasureSpec.makeMeasureSpec(mRecyclerView.getHeight(), View.MeasureSpec.EXACTLY);
+			}
+
+			//Measure and Layout the stickyView
+			final View headerView = holder.getContentView();
+			int childWidth = ViewGroup.getChildMeasureSpec(widthSpec,
+					mRecyclerView.getPaddingLeft() + mRecyclerView.getPaddingRight(),
+					headerView.getLayoutParams().width);
+			int childHeight = ViewGroup.getChildMeasureSpec(heightSpec,
+					mRecyclerView.getPaddingTop() + mRecyclerView.getPaddingBottom(),
+					headerView.getLayoutParams().height);
+
+			headerView.measure(childWidth, childHeight);
+			headerView.layout(0, 0, headerView.getMeasuredWidth(), headerView.getMeasuredHeight());
+		}
+		return holder;
+	}
+
 
 	/*---------------*/
 	/* INNER CLASSES */

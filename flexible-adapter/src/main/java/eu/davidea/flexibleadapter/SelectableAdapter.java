@@ -19,6 +19,7 @@ import android.os.Bundle;
 import android.support.annotation.IntDef;
 import android.support.annotation.NonNull;
 import android.support.v7.widget.GridLayoutManager;
+import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.StaggeredGridLayoutManager;
 import android.util.Log;
@@ -62,6 +63,7 @@ public abstract class SelectableAdapter extends RecyclerView.Adapter
 	 * - MODE_MULTI: Multi selection will be activated
 	 */
 	public static final int MODE_IDLE = 0, MODE_SINGLE = 1, MODE_MULTI = 2;
+	protected boolean mIsReversed;
 
 	/**
 	 * Annotation interface for selection modes.
@@ -128,6 +130,9 @@ public abstract class SelectableAdapter extends RecyclerView.Adapter
 	public void onAttachedToRecyclerView(RecyclerView recyclerView) {
 		super.onAttachedToRecyclerView(recyclerView);
 		mRecyclerView = recyclerView;
+		if(mRecyclerView.getLayoutManager() instanceof  LinearLayoutManager) {
+			mIsReversed = ((LinearLayoutManager) mRecyclerView.getLayoutManager()).getReverseLayout();
+		}
 	}
 
 	/**
